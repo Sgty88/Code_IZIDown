@@ -9,8 +9,8 @@ void IHM_Initialiser() {
   lcd.init();
   lcd.backlight();
   
-  pinMode(PIN_BP_VALIDER, INPUT_PULLDOWN);
-  pinMode(PIN_BP_DESCENTE, INPUT_PULLDOWN);
+  pinMode(PIN_BP_VALIDER, INPUT);
+  pinMode(PIN_BP_DESCENTE, INPUT);
   // Le joystick analogique n'a pas besoin de pinMode
 }
 
@@ -84,28 +84,71 @@ void IHM_AfficherUrgence() {
 
 // --- FONCTIONS DE LECTURE (Joystick et Boutons) ---
 
+// --- 1. CHOIX DE LA VITESSE ---
 int IHM_LireJoystickMenuVitesse() {
-  int valY = analogRead(A2); // On utilise l'axe Y du joystick (A2)
-  if (valY < 300) return 3;  // Poussé vers le haut (ou bas selon montage)
-  if (valY > 700) return 1;  // Poussé de l'autre sens
-  return 2;                  // Au centre
+  static int choix = 1; // La mémoire interne (garde sa valeur entre chaque tour)
+  static unsigned long dernierMvt = 0;
+  int valY = analogRead(A2); // (Ou la pin de ton axe Y)
+
+  // Si on a bougé le joystick et que 300ms se sont écoulées (anti-mitraillette)
+  if (millis() - dernierMvt > 300) {
+    if (valY > 700) { 
+      choix++; // On descend dans le menu
+      if (choix > 3) choix = 1; // Boucle : après 3, on revient à 1
+      dernierMvt = millis();
+    } 
+    else if (valY < 300) {
+      choix--; // On monte dans le menu
+      if (choix < 1) choix = 3; // Boucle : avant 1, on passe à 3
+      dernierMvt = millis();
+    }
+  }
+  return choix; // Retourne la valeur mémorisée, même si le joystick est relâché !
 }
 
+// --- 2. CHOIX DU MODE (Défini ou Libre) ---
 bool IHM_LireJoystickMode() {
+  static bool modeDefini = true; // Mémoire du mode
+  static unsigned long dernierMvt = 0;
   int valY = analogRead(A2);
-  return (valY > 512); // Moitié d'un côté = Défini, l'autre = Libre
+
+  if (millis() - dernierMvt > 300) {
+    if (valY > 700 || valY < 300) { // Dès qu'on pousse en haut ou en bas
+      modeDefini = !modeDefini;     // On inverse le choix (True devient False, et inversement)
+      dernierMvt = millis();
+    }
+  }
+  return modeDefini;
 }
 
+// --- 3. REGLAGE DES MILLIMETRES (Mode Libre) ---
 int IHM_LireJoystickMm() {
+  static int mm = 10; // On commence à 10mm par défaut
+  static unsigned long dernierMvt = 0;
   int valY = analogRead(A2);
-  return map(valY, 0, 1023, 1, 200); // Convertit la position en millimètres
+
+  // Délai plus court (150ms) pour que ça défile un peu plus vite quand on reste appuyé
+  if (millis() - dernierMvt > 150) {
+    if (valY > 700) {
+      mm += 5; // Ajoute 5 mm
+      if (mm > 200) mm = 200; // Limite à 200mm max
+      dernierMvt = millis();
+    } 
+    else if (valY < 300) {
+      mm -= 5; // Enlève 5 mm
+      if (mm < 1) mm = 1; // Limite à 1mm min
+      dernierMvt = millis();
+    }
+  }
+  return mm;
 }
 
 bool IHM_BoutonValiderAppuye() {
   // LOW car INPUT_PULLUP
-  return (digitalRead(PIN_BP_VALIDER) == LOW);
+  return (digitalRead(PIN_BP_VALIDER) == HIGH);
 }
 
 bool IHM_BoutonDescenteAppuye() {
-  return (digitalRead(PIN_BP_DESCENTE) == LOW);
+  return (digitalRead(PIN_BP_DESCENTE) == HIGH);
 }
+

@@ -1,125 +1,55 @@
 #include <Arduino.h>
 #include "Config.h"
-#include "IHM.h"
-#include "Moteur.h"
+#include "StateMachine.h"
 
-// --- LES DIFFERENTS ETATS DE LA PERCEUSE ---
-enum EtatSysteme {
-  CHOIX_VITESSE,
-  CHOIX_MODE_PROFONDEUR,
-  REGLAGE_LIBRE_MM,
-  ATTENTE_DEMARRAGE,
-  PERCAGE_DESCENTE,
-  REMONTEE,
-  URGENCE
-};
+#ifndef NOT_AN_INTERRUPT
+#define NOT_AN_INTERRUPT -1
+#endif
 
-EtatSysteme etatActuel = CHOIX_VITESSE;
+FsmContext g_fsm;
 
-// Variables pour mémoriser les choix de l'utilisateur
-int vitesseChoisie = 1;     // 1 (Dur), 2 (Doux), 3 (Bois)
-bool modeDefini = true;     // true = Défini (Fin de course), false = Libre (mm)
-int profondeurMm = 0;       // Valeur si mode Libre
-volatile bool flagUrgence = false; // Sécurité
-
-// --- FONCTION D'INTERRUPTION POUR L'URGENCE ---
-void declencherUrgence() {
-  flagUrgence = true;
-  Moteur_ArretImmediat(); // Coupe le moteur tout de suite
+// ISR si interruption disponible
+void declencherUrgenceISR()
+{
+  FSM_DeclencherUrgence(g_fsm);
 }
 
-void setup() {
+void setup()
+{
   Serial.begin(9600);
-  
-  IHM_Initialiser();    // Allume l'écran et configure les boutons
-  Moteur_Initialiser(); // Configure les pins du moteur
-  
-  // Attache l'interruption du bouton d'urgence (sur la pin 2)
-  attachInterrupt(digitalPinToInterrupt(PIN_BP_AU), declencherUrgence, FALLING);
-  
-  IHM_AfficherAccueil();
-  delay(2000);
+
+  // Config AU en pullup (LOW = appuyé)
+  pinMode(PIN_BP_AU, INPUT);
+
+  // Init FSM (IHM + moteur)
+  FSM_Init(g_fsm);
+
+  delay(2000); // laisse le temps de lire l'accueil (optionnel)
+
+  // Attache interruption seulement si la broche le permet
+  int irq = digitalPinToInterrupt(PIN_BP_AU);
+  if (irq != NOT_AN_INTERRUPT) {
+    attachInterrupt(irq, declencherUrgenceISR, FALLING);
+    Serial.println("[AU] Interruption active");
+  } else {
+    Serial.println("[AU] Pas d'interruption sur cette pin -> polling");
+  }
 }
 
-void loop() {
-  // 1. PRIORITE ABSOLUE : Vérifier l'urgence
-  if (flagUrgence) {
-    etatActuel = URGENCE;
+void loop()
+{
+  // Si pas d'interruption possible, on lit AU en polling
+  if (digitalPinToInterrupt(PIN_BP_AU) == NOT_AN_INTERRUPT) {
+    if (digitalRead(PIN_BP_AU) == HIGH) {
+      FSM_DeclencherUrgence(g_fsm);
+    }
   }
 
-  // 2. LA MACHINE A ETATS
-  switch (etatActuel) {
+  // Tick FSM
+  FSM_Tick(g_fsm);
 
-    case CHOIX_VITESSE:
-      // On lit le joystick pour choisir la vitesse
-      vitesseChoisie = IHM_LireJoystickMenuVitesse();
-      IHM_AfficherMenuVitesse(vitesseChoisie);
-      
-      // Si on appuie sur Valider
-      if (IHM_BoutonValiderAppuye()) {
-        etatActuel = CHOIX_MODE_PROFONDEUR;
-        delay(300); // Anti-rebond
-      }
-      break;
-
-    case CHOIX_MODE_PROFONDEUR:
-      modeDefini = IHM_LireJoystickMode();
-      IHM_AfficherMenuMode(modeDefini);
-
-      if (IHM_BoutonValiderAppuye()) {
-        if (modeDefini) {
-          etatActuel = ATTENTE_DEMARRAGE; // On saute le réglage des mm
-        } else {
-          etatActuel = REGLAGE_LIBRE_MM;  // On doit choisir les mm
-        }
-        delay(300);
-      }
-      break;
-
-    case REGLAGE_LIBRE_MM:
-      profondeurMm = IHM_LireJoystickMm();
-      IHM_AfficherReglageMm(profondeurMm);
-
-      if (IHM_BoutonValiderAppuye()) {
-        etatActuel = ATTENTE_DEMARRAGE;
-        delay(300);
-      }
-      break;
-
-    case ATTENTE_DEMARRAGE:
-      IHM_AfficherPret(vitesseChoisie, modeDefini ? -1 : profondeurMm);
-      
-      // On attend l'appui sur le Bouton 1 (Descente)
-      if (IHM_BoutonDescenteAppuye()) {
-        etatActuel = PERCAGE_DESCENTE;
-        Moteur_PreparerDescente(vitesseChoisie, modeDefini, profondeurMm);
-      }
-      break;
-
-    case PERCAGE_DESCENTE:
-      IHM_AfficherEnCours("Descente...");
-      
-      // Moteur_FaireUnPas() renvoie "true" si la cible est atteinte
-      if (Moteur_FaireUnPas() == true) {
-        etatActuel = REMONTEE; 
-      }
-      break;
-
-    case REMONTEE:
-      IHM_AfficherEnCours("Remontee...");
-      
-      // Renvoie "true" quand on touche le fin de course Haut (Point Zéro)
-      if (Moteur_RemonterAuZero() == true) {
-        etatActuel = CHOIX_VITESSE; // Retour au début du programme !
-      }
-      break;
-
-    case URGENCE:
-      IHM_AfficherUrgence();
-      // On bloque le programme ici. Il faudra faire un "Reset" de l'Arduino.
-      while(true) { delay(100); } 
-      break;
-  }
+  // Tempo légère (évite boucle trop rapide)
+  delay(1);
 }
 
 

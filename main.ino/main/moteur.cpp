@@ -28,11 +28,11 @@ void Moteur_PreparerDescente(int vitesseMode, bool modeDefini, int profondeurMm)
     pasCibles = profondeurMm * PAS_PAR_MM; 
   }
 
-  // 3. Calcul de la vitesse (Délai entre chaque pas)
-  // 1 mm/s = 400 pas par seconde -> 1 pas toutes les 2500 µs
-  if (vitesseMode == 1) delaiMicrosecondes = 2500; // Lent (1mm/s)
-  if (vitesseMode == 2) delaiMicrosecondes = 1250; // Moyen (2mm/s)
-  if (vitesseMode == 3) delaiMicrosecondes = 800;  // Rapide (3mm/s)
+// 3. Calcul de la vitesse (Délai entre chaque demi-pas en microsecondes)
+  // Base : 400 pas = 1 mm. 
+  if (vitesseMode == 1) delaiMicrosecondes = 2500; // Métaux durs (0.5 mm/s)
+  if (vitesseMode == 2) delaiMicrosecondes = 1250; // Métaux doux (1 mm/s)
+  if (vitesseMode == 3) delaiMicrosecondes = 625;  // Bois/Plastique (2 mm/s)
 }
 
 // Cette fonction est appelée en boucle par la machine à états
