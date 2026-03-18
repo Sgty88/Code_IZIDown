@@ -23,10 +23,15 @@
 #define PIN_MS2         6
 
 // --- 4. COMMUNICATION UART (Pour StallGuard) ---
-#define PIN_RX_DRIVER   RX  // A connecter au TX du driver
-#define PIN_TX_DRIVER   TX  // A connecter au RX du driver
+//#define PIN_RX_DRIVER   RX  // A connecter au TX du driver
+//#define PIN_TX_DRIVER   TX  // A connecter au RX du driver
 
-// --- 5. PARAMETRES MECANIQUES ---
+// --- 5. joystick  ---
+#define PIN_JOYSTICK_X  A1
+#define PIN_JOYSTICK_Y  A2
+#define PIN_JOYSTICK_BTN 10
+
+// --- 6. PARAMETRES MECANIQUES ---
 #define PAS_MOTEUR      200   // Nema 17 standard
 #define MICROSTEPS      16    // Réglage driver (MS1/MS2)
 #define PAS_VIS         8.0   // 8mm par tour (Tige T8)
@@ -35,14 +40,3 @@
 #define PAS_PAR_MM      ((PAS_MOTEUR * MICROSTEPS) / PAS_VIS) 
 
 #endif
-
-/*
-void setup() {
-  // put your setup code here, to run once:
-
-}
-
-void loop() {
-  // put your main code here, to run repeatedly:
-
-}*/
